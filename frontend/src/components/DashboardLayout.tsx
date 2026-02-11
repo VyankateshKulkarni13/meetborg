@@ -60,6 +60,7 @@ export default function DashboardLayout({ children, currentPage }: LayoutProps) 
 
     const navigation = [
         { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+        { name: 'Meetings', href: '/meetings', icon: '📅' },
         { name: 'Platform Accounts', href: '/platforms', icon: '🔐' },
         { name: 'Bot Missions', href: '/missions', icon: '🤖', badge: 'Soon' },
         { name: 'Live Monitoring', href: '/monitoring', icon: '📡', badge: 'Soon' },

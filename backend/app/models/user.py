@@ -24,6 +24,7 @@ class User(Base, TimestampMixin):
     
     # Relationships
     platforms = relationship("Platform", back_populates="user", cascade="all, delete-orphan")
+    meetings = relationship("Meeting", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User {self.username}>"

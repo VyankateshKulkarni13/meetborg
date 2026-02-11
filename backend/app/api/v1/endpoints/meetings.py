@@ -1,0 +1,278 @@
+"""
+Meeting API Endpoints
+CRUD operations for meeting management with platform auto-detection
+"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
+from typing import List
+from datetime import datetime
+
+from app.db.session import get_db
+from app.models.meeting import Meeting, MeetingStatus
+from app.models.user import User
+from app.schemas.meeting import (
+    MeetingCreate,
+    MeetingUpdate,
+    MeetingResponse,
+    MeetingListResponse,
+    PlatformDetectionResponse
+)
+from app.services.platform_detector import platform_detector
+from app.core.security import get_current_user
+
+router = APIRouter()
+
+
+@router.post("", response_model=MeetingResponse, status_code=status.HTTP_201_CREATED)
+async def create_meeting(
+    meeting_data: MeetingCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Create a new meeting with auto-detected platform
+    """
+    # Auto-detect platform from URL
+    platform, meeting_code = platform_detector.detect_platform(meeting_data.url)
+    
+    # Validate URL
+    if not platform_detector.is_valid_url(meeting_data.url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid meeting URL. Could not detect a supported platform."
+        )
+    
+    # Create meeting instance
+    meeting = Meeting(
+        url=meeting_data.url,
+        platform=platform,
+        meeting_code=meeting_code,
+        title=meeting_data.title,
+        scheduled_time=meeting_data.scheduled_time,
+        duration_minutes=meeting_data.duration_minutes,
+        purpose=meeting_data.purpose,
+        user_id=current_user.id,  # UUID, not string
+        status=MeetingStatus.SCHEDULED
+    )
+    
+    db.add(meeting)
+    await db.commit()
+    await db.refresh(meeting)
+    
+    return meeting
+
+
+@router.get("", response_model=MeetingListResponse)
+async def list_meetings(
+    skip: int = 0,
+    limit: int = 100,
+    status_filter: MeetingStatus = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all meetings for the current user with optional filtering
+    """
+    # Base query
+    query = select(Meeting).where(Meeting.user_id == current_user.id)
+    
+    # Apply status filter if provided
+    if status_filter:
+        query = query.where(Meeting.status == status_filter)
+    
+    # Order by scheduled time (upcoming first, then by created_at)
+    query = query.order_by(
+        Meeting.scheduled_time.asc().nullsfirst(),
+        Meeting.created_at.desc()
+    )
+    
+    # Get total count
+    count_query = select(Meeting).where(Meeting.user_id == current_user.id)
+    if status_filter:
+        count_query = count_query.where(Meeting.status == status_filter)
+    
+    total_result = await db.execute(count_query)
+    total = len(total_result.scalars().all())
+    
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    meetings = result.scalars().all()
+    
+    return MeetingListResponse(
+        meetings=meetings,
+        total=total,
+        page=skip // limit + 1 if limit > 0 else 1,
+        page_size=limit
+    )
+
+
+@router.get("/{meeting_id}", response_model=MeetingResponse)
+async def get_meeting(
+    meeting_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a specific meeting by ID
+    """
+    result = await db.execute(
+        select(Meeting).where(
+            and_(
+                Meeting.id == meeting_id,
+                Meeting.user_id == current_user.id
+            )
+        )
+    )
+    meeting = result.scalar_one_or_none()
+    
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with ID {meeting_id} not found"
+        )
+    
+    return meeting
+
+
+@router.put("/{meeting_id}", response_model=MeetingResponse)
+async def update_meeting(
+    meeting_id: str,
+    meeting_data: MeetingUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update an existing meeting
+    """
+    # Get meeting
+    result = await db.execute(
+        select(Meeting).where(
+            and_(
+                Meeting.id == meeting_id,
+                Meeting.user_id == str(current_user.id)
+            )
+        )
+    )
+    meeting = result.scalar_one_or_none()
+    
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with ID {meeting_id} not found"
+        )
+    
+    # Update fields
+    update_data = meeting_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(meeting, field, value)
+    
+    meeting.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(meeting)
+    
+    return meeting
+
+
+@router.delete("/{meeting_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_meeting(
+    meeting_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a meeting
+    """
+    result = await db.execute(
+        select(Meeting).where(
+            and_(
+                Meeting.id == meeting_id,
+                Meeting.user_id == str(current_user.id)
+            )
+        )
+    )
+    meeting = result.scalar_one_or_none()
+    
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with ID {meeting_id} not found"
+        )
+    
+    await db.delete(meeting)
+    await db.commit()
+
+
+@router.post("/{meeting_id}/join")
+async def trigger_join(
+    meeting_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually trigger joining a meeting (calls simple_join.py)
+    """
+    # Get meeting
+    result = await db.execute(
+        select(Meeting).where(
+            and_(
+                Meeting.id == meeting_id,
+                Meeting.user_id == str(current_user.id)
+            )
+        )
+    )
+    meeting = result.scalar_one_or_none()
+    
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting with ID {meeting_id} not found"
+        )
+    
+    # Update status
+    meeting.status = MeetingStatus.IN_PROGRESS
+    meeting.join_attempted_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(meeting)
+    
+    # Trigger simple_join.py script (opens new browser with full automation)
+    import subprocess
+    from pathlib import Path
+    
+    backend_dir = Path(__file__).parent.parent.parent.parent.parent
+    simple_join_path = backend_dir / "simple_join.py"
+    
+    try:
+        subprocess.Popen(["python", str(simple_join_path), meeting.url])
+    except Exception as e:
+        print(f"Error launching simple_join.py: {e}")
+        import traceback
+        traceback.print_exc()
+    
+
+    return {
+        "message": "Join triggered successfully",
+        "meeting_id": meeting_id,
+        "url": meeting.url,
+        "platform": meeting.platform
+    }
+
+
+@router.post("/detect-platform", response_model=PlatformDetectionResponse)
+async def detect_platform(url: str):
+    """
+    Detect platform from meeting URL (no authentication required)
+    """
+    platform, meeting_code = platform_detector.detect_platform(url)
+    is_valid = platform_detector.is_valid_url(url)
+    
+    return PlatformDetectionResponse(
+        platform=platform,
+        meeting_code=meeting_code,
+        is_valid=is_valid,
+        message=f"Detected: {platform_detector.get_platform_name(platform)}" if is_valid else "Could not detect platform"
+    )

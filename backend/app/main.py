@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db.session import engine
 from app.db.base import Base
+from app.services.scheduler import scheduler
 
 
 @asynccontextmanager
@@ -31,10 +32,16 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
         print("✅ Database tables created")
     
+    # Start scheduler
+    scheduler.start()
+    print("⏰ Auto-join scheduler started")
+    
     yield
     
     # Shutdown
     print("🛑 Shutting down AI Meeting Automation System...")
+    scheduler.stop()
+    print("zzz Scheduler stopped")
 
 
 # Create FastAPI application
@@ -50,7 +57,7 @@ app = FastAPI(
 # CORS middleware for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL] if settings.FRONTEND_URL else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
