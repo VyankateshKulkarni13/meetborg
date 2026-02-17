@@ -239,19 +239,37 @@ async def trigger_join(
     await db.commit()
     await db.refresh(meeting)
     
-    # Trigger simple_join.py script (opens new browser with full automation)
+    # Trigger automation script based on platform
     import subprocess
     from pathlib import Path
+    from app.models.meeting import PlatformType
     
     backend_dir = Path(__file__).parent.parent.parent.parent.parent
-    simple_join_path = backend_dir / "simple_join.py"
+    
+    # Select script based on platform
+    if meeting.platform == PlatformType.GOOGLE_MEET:
+        script_path = backend_dir / "simple_join.py"
+        print(f"[INFO] Triggering Google Meet automation for: {meeting.url}")
+    elif meeting.platform == PlatformType.ZOOM:
+        script_path = backend_dir / "zoom_join.py"
+        print(f"[INFO] Triggering Zoom automation for: {meeting.url}")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Automation not supported for platform: {meeting.platform}"
+        )
     
     try:
-        subprocess.Popen(["python", str(simple_join_path), meeting.url])
+        subprocess.Popen(["python", str(script_path), meeting.url])
+        print(f"[OK] Automation script launched: {script_path.name}")
     except Exception as e:
-        print(f"Error launching simple_join.py: {e}")
+        print(f"[ERROR] Failed to launch automation script: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger automation: {str(e)}"
+        )
     
 
     return {

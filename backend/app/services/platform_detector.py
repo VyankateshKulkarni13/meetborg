@@ -17,9 +17,10 @@ class PlatformDetector:
             r'g\.co/meet/([a-z]{3}(?:-[a-z]{4}){2})',
         ],
         PlatformType.ZOOM: [
-            r'zoom\.us/j/(\d{9,})',  # Meeting ID
-            r'zoom\.us/meeting/(\d{9,})',
-            r'us\d+web\.zoom\.us/j/(\d{9,})',
+            r'zoom\.us/j/(\d{9,})(?:\?pwd=([^&\s]+))?',  # Meeting ID with optional password
+            r'zoom\.us/meeting/(\d{9,})(?:\?pwd=([^&\s]+))?',
+            r'us\d+web\.zoom\.us/j/(\d{9,})(?:\?pwd=([^&\s]+))?',
+            r'(?:[\w-]+\.)?zoom\.us/my/([\w.-]+)',  # Personal Meeting Link
         ],
         PlatformType.MICROSOFT_TEAMS: [
             r'teams\.microsoft\.com/.*meetup-join/([^/\?]+)',

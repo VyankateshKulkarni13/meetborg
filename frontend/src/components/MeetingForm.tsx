@@ -164,8 +164,19 @@ const MeetingForm: React.FC<MeetingFormProps> = ({ open, onClose, onSuccess }) =
     };
 
     return (
-        <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Add New Meeting</DialogTitle>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    borderRadius: 3,
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+                }
+            }}
+        >
+            <DialogTitle sx={{ pb: 1, fontWeight: 'bold' }}>Add New Meeting</DialogTitle>
             <DialogContent>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
                     {error && <Alert severity="error">{error}</Alert>}
