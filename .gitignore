@@ -75,3 +75,12 @@ playwright-report/
 alembic/versions/*.pyc
 # Secrets
 /*.json
+
+# Teammate review copy
+AI Meeter - Teammate Review/
+
+# Bot debug screenshots & HTML dumps (generated at runtime)
+backend/zoom_*.png
+backend/zoom_*.html
+backend/teams_*.png
+backend/teams_*.html

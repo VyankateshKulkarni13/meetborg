@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    // Required for Docker multi-stage build (copies only necessary files)
+    output: 'standalone',
     async rewrites() {
         return [
             {
@@ -12,3 +14,4 @@ const nextConfig = {
 };
 
 export default nextConfig;
+

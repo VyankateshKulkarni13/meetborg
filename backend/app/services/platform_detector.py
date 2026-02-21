@@ -25,6 +25,8 @@ class PlatformDetector:
         PlatformType.MICROSOFT_TEAMS: [
             r'teams\.microsoft\.com/.*meetup-join/([^/\?]+)',
             r'teams\.live\.com/meet/([^/\?]+)',
+            # Launch-redirect URL: coords param contains meetingCode as Base64 JSON
+            r'teams\.live\.com/light-meetings/launch.*[?&]p=([^&]+)',
         ],
         PlatformType.WEBEX: [
             r'(?:webex\.com|meet\.webex\.com)/meet/([^/\?]+)',

@@ -253,6 +253,9 @@ async def trigger_join(
     elif meeting.platform == PlatformType.ZOOM:
         script_path = backend_dir / "zoom_join.py"
         print(f"[INFO] Triggering Zoom automation for: {meeting.url}")
+    elif meeting.platform == PlatformType.MICROSOFT_TEAMS:
+        script_path = backend_dir / "teams_join.py"
+        print(f"[INFO] Triggering Teams automation for: {meeting.url}")
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,0 +1,56 @@
+
+services:
+
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: meetborg_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aimeet
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"          # exposed to localhost so local backend can connect
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aimeet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: meetborg_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"          # exposed to localhost so local backend can connect
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Next.js Frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meetborg_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Points to local backend running on host machine
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    depends_on:
+      - postgres
+
+# ── Named Volumes ──────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:

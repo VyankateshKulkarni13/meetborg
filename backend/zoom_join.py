@@ -35,15 +35,15 @@ async def join_zoom_meeting(meeting_url: str):
                 '--disable-blink-features=AutomationControlled',
                 '--use-fake-ui-for-media-stream',
                 '--use-fake-device-for-media-stream',
-                # Bypass external protocol handler dialogs
                 '--disable-features=ExternalProtocolDialogInProductHelp',
                 '--disable-external-intent-requests',
-                # Auto-dismiss protocol handler prompts
                 '--no-first-run',
-                '--no-default-browser-check'
+                '--no-default-browser-check',
+                '--window-size=1280,720',
+                '--window-position=100,50',
             ],
             permissions=['camera', 'microphone'],
-            viewport={'width': 1920, 'height': 1080},
+            viewport={'width': 1280, 'height': 720},
             # Bypass download prompts
             accept_downloads=False
         )

@@ -160,7 +160,7 @@ const Meetings: React.FC = () => {
 
                 {/* Dashboard Summary */}
                 <Grid container spacing={3} sx={{ mb: 5 }}>
-                    <Grid item xs={12} md={8}>
+                    <Grid size={{ xs: 12, md: 8 }}>
                         <Paper
                             elevation={0}
                             sx={{
@@ -232,7 +232,7 @@ const Meetings: React.FC = () => {
                             />
                         </Paper>
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                         <Paper
                             elevation={0}
                             sx={{
