@@ -147,7 +147,7 @@ const TeamsJoinPage: React.FC = () => {
 
                 <Grid container spacing={4}>
                     {/* Left Panel - Preview */}
-                    <Grid item xs={12} md={8}>
+                    <Grid size={{ xs: 12, md: 8 }}>
                         <Box sx={{
                             width: '100%',
                             height: 500,
@@ -214,7 +214,7 @@ const TeamsJoinPage: React.FC = () => {
                     </Grid>
 
                     {/* Right Panel - Settings */}
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                         <Paper sx={{ p: 4, bgcolor: '#2B2B2B', color: 'white', borderRadius: 2, height: '100%' }}>
                             <Typography variant="h5" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Groups sx={{ color: '#6264A7' }} />

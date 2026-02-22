@@ -45,8 +45,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Points to local backend running on host machine
+      # NEXT_PUBLIC_API_URL = used by BROWSER (client-side JS) → always localhost
+      # since the browser runs on the host machine where backend is at localhost:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      # BACKEND_URL = used by Next.js SERVER inside container for SSR/proxy rewrites
+      # container can't use localhost (points to itself), so use host.docker.internal
+      BACKEND_URL: http://host.docker.internal:8000
+    # Required on Linux; Windows/Mac Docker Desktop supports this natively
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - postgres
 

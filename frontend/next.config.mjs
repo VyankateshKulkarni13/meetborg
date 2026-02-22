@@ -4,10 +4,13 @@ const nextConfig = {
     // Required for Docker multi-stage build (copies only necessary files)
     output: 'standalone',
     async rewrites() {
+        // BACKEND_URL is set in docker-compose.yml for Docker.
+        // Falls back to localhost for normal "npm run dev" usage.
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
         return [
             {
                 source: '/api/:path*',
-                destination: 'http://localhost:8000/api/:path*',
+                destination: `${backendUrl}/api/:path*`,
             },
         ];
     },

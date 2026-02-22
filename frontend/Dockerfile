@@ -12,9 +12,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Accept API URL as build arg (can be overridden at build time)
+# NEXT_PUBLIC_API_URL baked into client JS → must be localhost (browser→host)
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# BACKEND_URL used by Next.js server proxy → must be host.docker.internal (container→host)
+ENV BACKEND_URL=http://host.docker.internal:8000
 
 RUN npm run build
 
