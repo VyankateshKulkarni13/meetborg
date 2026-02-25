@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     SECRET_KEY: str
+    # Internal secret used by bot scripts to call the /complete endpoint
+    INTERNAL_BOT_SECRET: str = "meetborg-internal-secret-change-me"
     
     # Server
     API_HOST: str = "0.0.0.0"

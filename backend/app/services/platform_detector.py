@@ -13,8 +13,8 @@ class PlatformDetector:
     # URL patterns for different platforms with meeting code extraction
     PATTERNS = {
         PlatformType.GOOGLE_MEET: [
-            r'meet\.google\.com/([a-z]{3}(?:-[a-z]{4}){2})',  # abc-defg-hij
-            r'g\.co/meet/([a-z]{3}(?:-[a-z]{4}){2})',
+            r'meet\.google\.com/([a-z]{3}-[a-z]{3,5}-[a-z]{3,5})',  # xxx-xxxx-xxx or xxx-xxxx-xxxx
+            r'g\.co/meet/([a-z]{3}-[a-z]{3,5}-[a-z]{3,5})',
         ],
         PlatformType.ZOOM: [
             r'zoom\.us/j/(\d{9,})(?:\?pwd=([^&\s]+))?',  # Meeting ID with optional password

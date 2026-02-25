@@ -2,10 +2,10 @@
 Meeting API Endpoints
 CRUD operations for meeting management with platform auto-detection
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 from app.db.session import get_db
@@ -20,6 +20,7 @@ from app.schemas.meeting import (
 )
 from app.services.platform_detector import platform_detector
 from app.core.security import get_current_user
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -263,7 +264,13 @@ async def trigger_join(
         )
     
     try:
-        subprocess.Popen(["python", str(script_path), meeting.url])
+        subprocess.Popen([
+            "python", str(script_path),
+            meeting.url,
+            "--meeting-id", str(meeting_id),
+            "--api-url", "http://localhost:8000/api/v1",
+            "--api-secret", settings.INTERNAL_BOT_SECRET,
+        ])
         print(f"[OK] Automation script launched: {script_path.name}")
     except Exception as e:
         print(f"[ERROR] Failed to launch automation script: {e}")
@@ -281,6 +288,42 @@ async def trigger_join(
         "url": meeting.url,
         "platform": meeting.platform
     }
+
+
+@router.post("/{meeting_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
+async def complete_meeting(
+    meeting_id: str,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Internal endpoint called by bot scripts when a meeting ends.
+    Auth: Authorization: Bearer {INTERNAL_BOT_SECRET}
+    No user session required.
+    """
+    # Validate internal secret
+    expected = f"Bearer {settings.INTERNAL_BOT_SECRET}"
+    if not authorization or authorization != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal secret"
+        )
+
+    result = await db.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Meeting {meeting_id} not found"
+        )
+
+    meeting.status = MeetingStatus.COMPLETED
+    meeting.join_successful = "success"
+    meeting.updated_at = datetime.utcnow()
+    await db.commit()
+    print(f"[OK] Meeting {meeting_id} marked COMPLETED by bot")
 
 
 @router.post("/detect-platform", response_model=PlatformDetectionResponse)

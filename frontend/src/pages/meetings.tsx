@@ -46,6 +46,19 @@ const Meetings: React.FC = () => {
         loadMeetings(statusFilter);
     }, [statusFilter]);
 
+    // Auto-refresh every 30s while any meeting is IN_PROGRESS
+    useEffect(() => {
+        const hasInProgress = meetings.some(m => m.status === 'in_progress');
+        if (!hasInProgress) return;
+
+        const interval = setInterval(() => {
+            loadMeetings(statusFilter);
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [meetings, statusFilter]);
+
+
     const handleFormSuccess = () => {
         setSuccessMessage('Meeting added successfully!');
         loadMeetings(statusFilter);

@@ -2,9 +2,13 @@
 Automated Google Meet Join - Uses separate profile (no need to close Chrome)
 """
 import asyncio
+import argparse
 from playwright.async_api import async_playwright
+from meeting_monitor import monitor_and_complete
 
-async def join_meeting_auto(meeting_url: str):
+async def join_meeting_auto(meeting_url: str, meeting_id: str = None,
+                            api_url: str = "http://localhost:8000/api/v1",
+                            api_secret: str = ""):
     """
     Join Google Meet automatically 
     Note: You'll need to log in once, then it will remember your session
@@ -35,17 +39,31 @@ async def join_meeting_auto(meeting_url: str):
             args=[
                 '--disable-blink-features=AutomationControlled',
                 '--use-fake-ui-for-media-stream',
-                '--use-fake-device-for-media-stream'
+                '--use-fake-device-for-media-stream',
+                '--window-size=1280,720',
+                '--window-position=100,50',
             ],
             permissions=['camera', 'microphone'],
-            viewport={'width': 1920, 'height': 1080}
+            viewport={'width': 1280, 'height': 720}
         )
         
         print("[OK] Chrome launched!")
-        
+
         # Create new page (new tab in existing browser)
         page = await context.new_page()
-        
+
+        # Force window size via CDP — overrides profile's saved maximized state
+        try:
+            cdp = await context.new_cdp_session(page)
+            info = await cdp.send("Browser.getWindowForTarget")
+            await cdp.send("Browser.setWindowBounds", {
+                "windowId": info["windowId"],
+                "bounds": {"left": 100, "top": 50, "width": 1280, "height": 720, "windowState": "normal"}
+            })
+            await cdp.detach()
+        except Exception:
+            pass  # CDP not available, window-size flag is our fallback
+
         print(f"\n[INFO] Navigating to meeting: {meeting_url}")
         await page.goto(meeting_url, wait_until='domcontentloaded')
         
@@ -293,52 +311,47 @@ async def join_meeting_auto(meeting_url: str):
                     print("[SUCCESS] Join button clicked!")
                     print("[SUCCESS] Check the browser - you should be joining")
                     print("=" * 60)
-                    
-                    print("\n[INFO] Browser will stay open - close it manually when done")
-                    print("[INFO] Meeting automation complete!")
-                    print("[INFO] Press Ctrl+C in terminal to close browser and exit")
-                    
-                    # Keep browser open indefinitely - wait until user manually closes
-                    try:
-                        while True:
-                            await page.wait_for_timeout(60000)  # Wait 1 minute at a time
-                    except KeyboardInterrupt:
-                        print("\n[INFO] Closing browser...")
-                        await context.close()
-                        return True
-                    except Exception:
-                        # Browser was closed manually
-                        return True
                 else:
                     print("[WARN] Could not click join button with any strategy")
-                    print("[INFO] Taking screenshot for debugging...")
                     await page.screenshot(path='meeting_page.png')
                     print("[OK] Screenshot saved to: meeting_page.png")
-                    
-                    print("\n[INFO] Browser will stay open - join manually if needed")
-                    await page.wait_for_timeout(120000)
-                    await context.close()
-                    return False
+
             except Exception as e:
                 print(f"[ERROR] Error during join: {e}")
-                await page.wait_for_timeout(60000)
-                await context.close()
-                return False
-        
-        await context.close()
-        return False
+                await page.screenshot(path='meeting_join_error.png')
+
+        # ── Monitor meeting until it ends ────────────────────────────────────
+        print("\n[INFO] Meeting joined — monitoring for meeting end...")
+        await monitor_and_complete(
+            page=page,
+            context=context,
+            platform="google_meet",
+            meeting_id=meeting_id,
+            api_url=api_url,
+            api_secret=api_secret,
+        )
+        return True
+
+    return False
+
+
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1:
-        meeting_url = sys.argv[1]
-    else:
-        meeting_url = "https://meet.google.com/aro-pzxz-bma"
-    
-    result = asyncio.run(join_meeting_auto(meeting_url))
-    
+    parser = argparse.ArgumentParser(description="Google Meet Bot")
+    parser.add_argument("url", help="Meeting URL")
+    parser.add_argument("--meeting-id", default=None, help="Meeting ID for completion callback")
+    parser.add_argument("--api-url", default="http://localhost:8000/api/v1")
+    parser.add_argument("--api-secret", default="")
+    args = parser.parse_args()
+
+    result = asyncio.run(join_meeting_auto(
+        args.url,
+        meeting_id=args.meeting_id,
+        api_url=args.api_url,
+        api_secret=args.api_secret,
+    ))
+
     if result:
-        print("\n[SUCCESS] Bot clicked  join button!")
+        print("\n[SUCCESS] Bot joined and meeting completed!")
     else:
         print("\n[INFO] Check browser or screenshot")

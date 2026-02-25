@@ -8,11 +8,13 @@ Supports URL types:
   3. Classic Teams:  https://teams.microsoft.com/l/meetup-join/...
 """
 import asyncio
+import argparse
 import json
 import base64
 import re
 from urllib.parse import urlparse, parse_qs, unquote
 from playwright.async_api import async_playwright
+from meeting_monitor import monitor_and_complete
 
 
 def extract_teams_join_url(original_url: str) -> str:
@@ -134,7 +136,9 @@ async def toggle_off(page, candidate_selectors: list[tuple[str, str]], label: st
     return False
 
 
-async def join_teams_meeting(meeting_url: str):
+async def join_teams_meeting(meeting_url: str, meeting_id: str = None,
+                             api_url: str = "http://localhost:8000/api/v1",
+                             api_secret: str = ""):
     """
     Join a Microsoft Teams meeting automatically via the web browser.
     Steps: parse URL → navigate → enter name → turn off camera → mute mic → join
@@ -177,6 +181,18 @@ async def join_teams_meeting(meeting_url: str):
         print("[OK] Chrome launched!")
 
         page = await context.new_page()
+
+        # Force window size via CDP — overrides profile's saved maximized state
+        try:
+            cdp = await context.new_cdp_session(page)
+            info = await cdp.send("Browser.getWindowForTarget")
+            await cdp.send("Browser.setWindowBounds", {
+                "windowId": info["windowId"],
+                "bounds": {"left": 100, "top": 50, "width": 1280, "height": 720, "windowState": "normal"}
+            })
+            await cdp.detach()
+        except Exception:
+            pass  # CDP not available, window-size flag is our fallback
 
         # Handle any browser-level dialogs
         page.on("dialog", lambda d: asyncio.ensure_future(d.dismiss()))
@@ -333,30 +349,34 @@ async def join_teams_meeting(meeting_url: str):
             print("[SUCCESS] Joined Teams meeting!")
             print("=" * 60)
 
-        print("\n[INFO] Browser will stay open — close it manually when done.")
-
-        # Keep browser alive
-        try:
-            while True:
-                await page.wait_for_timeout(60000)
-        except KeyboardInterrupt:
-            print("\n[INFO] Closing browser...")
-            await context.close()
-            return True
-        except Exception:
-            return True
+        # ── Monitor meeting until it ends ────────────────────────────────
+        print("\n[INFO] Monitoring for meeting end...")
+        await monitor_and_complete(
+            page=page,
+            context=context,
+            platform="microsoft_teams",
+            meeting_id=meeting_id,
+            api_url=api_url,
+            api_secret=api_secret,
+        )
+        return True
 
 
 if __name__ == "__main__":
-    import sys
+    parser = argparse.ArgumentParser(description="Microsoft Teams Bot")
+    parser.add_argument("url", help="Meeting URL")
+    parser.add_argument("--meeting-id", default=None, help="Meeting ID for completion callback")
+    parser.add_argument("--api-url", default="http://localhost:8000/api/v1")
+    parser.add_argument("--api-secret", default="")
+    args = parser.parse_args()
 
-    if len(sys.argv) > 1:
-        url = sys.argv[1]
-    else:
-        url = "https://teams.live.com/meet/1234567890?anon=true"
-        print("[WARN] No URL provided, using placeholder")
+    result = asyncio.run(join_teams_meeting(
+        args.url,
+        meeting_id=args.meeting_id,
+        api_url=args.api_url,
+        api_secret=args.api_secret,
+    ))
 
-    result = asyncio.run(join_teams_meeting(url))
     if result:
         print("\n[SUCCESS] Teams automation completed!")
     else:
