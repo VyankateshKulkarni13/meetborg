@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # File Storage
     RECORDINGS_PATH: str = "./recordings"
     MAX_RECORDING_SIZE_GB: int = 50
+
+    # Bot execution mode
+    # 'local'  → run join scripts directly via subprocess (current Windows dev approach)
+    # 'docker' → spin up bot-worker container per meeting (production, audio capture)
+    BOT_MODE: str = "local"
+    BOT_WORKER_IMAGE: str = "meetborg/bot-worker:latest"
+
     
     # Session Security
     SESSION_EXPIRE_HOURS: int = 24

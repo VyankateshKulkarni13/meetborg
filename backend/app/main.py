@@ -12,6 +12,9 @@ from app.api.v1.api import api_router
 from app.db.session import engine
 from app.db.base import Base
 from app.services.scheduler import scheduler
+# Import models so Base.metadata registers all tables BEFORE create_all runs
+from app.models import User, Platform, Meeting  # noqa: F401
+
 
 
 @asynccontextmanager

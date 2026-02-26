@@ -17,6 +17,9 @@ from typing import Optional
 # disappears. We use this to detect meeting end robustly.
 _TIMER_RE = re.compile(r'\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b')
 
+# Teams participant count patterns — e.g. '2 people', '1 person', '1 people'
+_TEAMS_PARTICIPANT_RE = re.compile(r'(\d+)\s+(?:people|person|participant)')
+
 
 def _extract_timer_seconds(frame_texts: list) -> Optional[int]:
     """Extract call timer as total seconds from any frame, or None if not found."""
@@ -28,6 +31,26 @@ def _extract_timer_seconds(frame_texts: list) -> Optional[int]:
                 return int(groups[0]) * 3600 + int(groups[1]) * 60 + int(groups[2])
             else:  # MM:SS
                 return int(groups[0]) * 60 + int(groups[1])
+    return None
+
+
+def _extract_teams_participant_count(frame_texts: list) -> Optional[int]:
+    """Extract participant count from Teams frame text, or None if not found.
+    
+    Returns:
+      - The number if found (e.g. '2 people' -> 2)
+      - 0 if 'people' appears without a number (Teams removes the count when alone)
+      - None if no participant indicator found at all
+    """
+    for _, text in frame_texts:
+        m = _TEAMS_PARTICIPANT_RE.search(text)
+        if m:
+            return int(m.group(1))
+        # Teams removes the number entirely when bot is alone:
+        # '2 people' becomes just 'people' (no digit)
+        # Check for 'people' NOT preceded by a digit
+        if re.search(r'(?<!\d)\bpeople\b', text) and not _TEAMS_PARTICIPANT_RE.search(text):
+            return 0  # no number = bot is alone
     return None
 
 
@@ -51,8 +74,11 @@ _END_PHRASES = {
         'everyone has left', "you've left", 'you left the call',
         'left the call', 'left the meeting', 'call is over',
         'the call is over', 'your call has ended',
-        # Teams sometimes shows these on post-call screen
-        'rate your call', 'how was your call',
+        # Teams shows these on the post-call screen or when alone
+        'rate your call', 'how was your call', 'rate your call quality',
+        'only one in the meeting', 'only one in this meeting',
+        'you\'re the only one here',
+        'waiting for others to join',
     ],
 }
 
@@ -314,6 +340,10 @@ async def monitor_and_complete(
     teams_last_timer: Optional[int] = None
     teams_timer_frozen_count = 0
 
+    # Teams-specific: track participant count (bot alone = meeting over)
+    teams_alone_count = 0           # consecutive polls where participant count <= 1
+    teams_last_participant_count: Optional[int] = None
+
     ended = False
     reason = ""
 
@@ -353,6 +383,28 @@ async def monitor_and_complete(
                 reason = "teams_timer_disappeared"
                 ended = True
                 break
+
+            # ── Teams participant count detection ─────────────────────────────
+            # Frame text shows '2 people', '3 people', etc.
+            # When host leaves, it drops to '1 person' or '1 people' — bot is alone.
+            participant_count = _extract_teams_participant_count(ft)
+            if participant_count is not None:
+                teams_last_participant_count = participant_count
+                if participant_count <= 1:
+                    teams_alone_count += 1
+                    print(f"[MONITOR] Teams: bot appears alone ({participant_count} participant) [{teams_alone_count}/2 polls]")
+                    if teams_alone_count >= 2:
+                        reason = f"teams_bot_alone_{participant_count}_participants"
+                        ended = True
+                        break
+                else:
+                    teams_alone_count = 0  # reset — others are still in
+
+            # Log participant count and frame text every poll for debugging
+            if tick < 5 or tick % 5 == 0:
+                for _, text in ft:
+                    snippet = text.replace('\n', ' ')[:200]
+                    print(f"[MONITOR]   frame text: {snippet!r}")
 
         # ── Generic end-signal checks ───────────────────────────────────────
         active, reason = await _is_meeting_active(

@@ -61,3 +61,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  recordings_data:   # shared between bot-worker containers and the backend

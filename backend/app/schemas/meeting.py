@@ -68,6 +68,8 @@ class MeetingResponse(BaseModel):
     updated_at: datetime
     join_attempted_at: Optional[datetime]
     join_successful: Optional[str]
+    recording_path: Optional[str] = None
+    audio_path: Optional[str] = None
     
     class Config:
         from_attributes = True

@@ -1,0 +1,9 @@
+# Don't copy these into the bot-worker image
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.png
+*.html
+*.log
+.env

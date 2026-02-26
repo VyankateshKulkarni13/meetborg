@@ -63,6 +63,10 @@ class Meeting(Base):
     # Join tracking
     join_attempted_at = Column(DateTime, nullable=True)
     join_successful = Column(String, nullable=True)  # Success/failure reason
+
+    # Recording (populated after meeting ends)
+    recording_path = Column(String, nullable=True)  # path to screen.mkv
+    audio_path = Column(String, nullable=True)       # path to audio.wav (Whisper input)
     
     def __repr__(self):
         return f"<Meeting(id={self.id}, title={self.title}, platform={self.platform}, status={self.status})>"

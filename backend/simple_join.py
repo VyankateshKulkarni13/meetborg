@@ -32,11 +32,13 @@ async def join_meeting_auto(meeting_url: str, meeting_id: str = None,
         user_data_dir.mkdir(parents=True, exist_ok=True)
         
         # Launch persistent context (reuses existing browser if running)
+        import os
+        docker_args = ["--no-sandbox", "--disable-dev-shm-usage"] if os.environ.get("DOCKER_ENV") == "1" else []
         context = await p.chromium.launch_persistent_context(
             str(user_data_dir),
             headless=False,
             channel='chrome',
-            args=[
+            args=docker_args + [
                 '--disable-blink-features=AutomationControlled',
                 '--use-fake-ui-for-media-stream',
                 '--use-fake-device-for-media-stream',

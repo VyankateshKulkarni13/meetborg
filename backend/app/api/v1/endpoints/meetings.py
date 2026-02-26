@@ -264,15 +264,46 @@ async def trigger_join(
         )
     
     try:
-        subprocess.Popen([
-            "python", str(script_path),
-            meeting.url,
-            "--meeting-id", str(meeting_id),
-            "--api-url", "http://localhost:8000/api/v1",
-            "--api-secret", settings.INTERNAL_BOT_SECRET,
-        ])
-        print(f"[OK] Automation script launched: {script_path.name}")
+        if settings.BOT_MODE == "docker":
+            # ── Docker mode: spin up bot-worker container ──────────────────────
+            # One container per meeting. Auto-destroys on exit (--rm).
+            # Chrome runs inside the container on a virtual display (Xvfb) with
+            # virtual audio (PulseAudio) — reliable cross-platform capture.
+            import os
+            recordings_abs = os.path.abspath(settings.RECORDINGS_PATH)
+            os.makedirs(recordings_abs, exist_ok=True)
+
+            subprocess.Popen([
+                "docker", "run", "--rm",
+                # Pass meeting details as env vars
+                "-e", f"MEETING_URL={meeting.url}",
+                "-e", f"MEETING_ID={meeting_id}",
+                "-e", f"PLATFORM={meeting.platform.value}",
+                "-e", f"API_URL=http://host.docker.internal:8000/api/v1",
+                "-e", f"API_SECRET={settings.INTERNAL_BOT_SECRET}",
+                "-e", "VNC_ENABLED=false",
+                "-e", "RECORD_VIDEO=true",
+                # Mount local recordings folder into container
+                "-v", f"{recordings_abs}:/recordings",
+                # Allow container to reach host machine's backend API
+                "--add-host", "host.docker.internal:host-gateway",
+                # Container name = meeting ID (useful for `docker ps` visibility)
+                "--name", f"meetborg-bot-{meeting_id[:8]}",
+                settings.BOT_WORKER_IMAGE,
+            ])
+            print(f"[OK] Bot-worker container launched for meeting {meeting_id}")
+        else:
+            # ── Local mode: run join script directly (Windows dev default) ─────
+            subprocess.Popen([
+                "python", str(script_path),
+                meeting.url,
+                "--meeting-id", str(meeting_id),
+                "--api-url", "http://localhost:8000/api/v1",
+                "--api-secret", settings.INTERNAL_BOT_SECRET,
+            ])
+            print(f"[OK] Automation script launched: {script_path.name}")
     except Exception as e:
+
         print(f"[ERROR] Failed to launch automation script: {e}")
         import traceback
         traceback.print_exc()
