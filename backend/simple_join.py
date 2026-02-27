@@ -269,52 +269,43 @@ async def join_meeting_auto(meeting_url: str, meeting_id: str = None,
                 # Try multiple strategies to find and click the button
                 clicked = False
                 
+                # Strategy 0: Check if we're already in 'Waiting' state
+                waiting_msg = await page.query_selector('text="Please wait until a meeting host brings you into the call"')
+                if waiting_msg and await waiting_msg.is_visible():
+                    print("[OK] Already in waiting room (Ask to join already sent)")
+                    clicked = True
+
                 # Strategy 1: Use CSS selector with wait
-                try:
-                    join_btn = await page.wait_for_selector(
-                        'button:has-text("Ask to join"), button:has-text("Join now"), button:has-text("Join")',
-                        state='visible',
-                        timeout=10000
-                    )
-                    if join_btn:
-                        print("[OK] Found join button (Strategy 1)")
-                        await join_btn.scroll_into_view_if_needed()
-                        await page.wait_for_timeout(500)
-                        await join_btn.click()
-                        clicked = True
-                except Exception as e:
-                    print(f"[WARN] Strategy 1 failed: {e}")
-                
-                # Strategy 2: JavaScript click
                 if not clicked:
                     try:
-                        print("[INFO] Trying JavaScript click...")
-                        result = await page.evaluate('''() => {
-                            const buttons = Array.from(document.querySelectorAll('button, span[role="button"]'));
-                            for (const btn of buttons) {
-                                const text = btn.innerText || btn.textContent || '';
-                                const label = btn.getAttribute('aria-label') || '';
-                                if (text.includes('Ask to join') || text.includes('Join now') || 
-                                    label.includes('Ask to join') || label.includes('Join now')) {
-                                    btn.click();
-                                    return 'Clicked: ' + text + ' / ' + label;
-                                }
-                            }
-                            return 'Button not found';
-                        }''')
-                        print(f"[INFO] JavaScript result: {result}")
-                        if 'Clicked' in result:
+                        join_btn = await page.wait_for_selector(
+                            'button:has-text("Ask to join"), button:has-text("Join now"), button:has-text("Join")',
+                            state='visible',
+                            timeout=10000
+                        )
+                        if join_btn:
+                            print("[OK] Found join button (Strategy 1)")
+                            await join_btn.scroll_into_view_if_needed()
+                            await page.wait_for_timeout(500)
+                            await join_btn.click()
                             clicked = True
-                    except Exception as e:
-                        print(f"[WARN] Strategy 2 failed: {e}")
+                    except Exception:
+                        pass
                 
+                # Strategy 2: Check for waiting message again after click attempt
+                if not clicked:
+                    waiting_msg = await page.query_selector('text="Please wait until a meeting host brings you into the call"')
+                    if waiting_msg and await waiting_msg.is_visible():
+                        print("[OK] Now in waiting room")
+                        clicked = True
+
                 if clicked:
                     print("\n" + "=" * 60)
-                    print("[SUCCESS] Join button clicked!")
-                    print("[SUCCESS] Check the browser - you should be joining")
+                    print("[SUCCESS] Join request sent/confirmed!")
+                    print("[SUCCESS] The bot is now waiting to be admitted.")
                     print("=" * 60)
                 else:
-                    print("[WARN] Could not click join button with any strategy")
+                    print("[WARN] Could not click join button and not in waiting room")
                     await page.screenshot(path='meeting_page.png')
                     print("[OK] Screenshot saved to: meeting_page.png")
 

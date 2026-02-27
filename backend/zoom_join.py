@@ -309,17 +309,48 @@ async def join_zoom_meeting(meeting_url: str, meeting_id: str = None,
         
         join_clicked = False
         try:
-            # Wait for Join button to be clickable
-            await page.wait_for_selector('button:has-text("Join")', state='visible', timeout=10000)
-            join_button = page.locator('button:has-text("Join")').first
-            await join_button.click()
-            print("[OK] Join button clicked!")
-            join_clicked = True
-            await page.wait_for_timeout(3000)
-        except Exception as e:
-            print(f"[WARN] Could not find or click Join button: {e}")
-            await page.screenshot(path='zoom_join_failed.png')
-            print("[INFO] Screenshot saved: zoom_join_failed.png")
+            # Strategy 0: Check if we're already in 'Waiting' state
+            content = await page.content()
+            if 'waiting for the host to start' in content.lower() or 'please wait' in content.lower():
+                print("[OK] Already in waiting room state")
+                join_clicked = True
+
+            # Strategy 1: CSS selector
+            if not join_clicked:
+                try:
+                    join_btn = await page.wait_for_selector('button:has-text("Join")', state='visible', timeout=10000)
+                    if join_btn:
+                        print("[OK] Found Join button (Strategy 1)")
+                        await join_btn.click()
+                        join_clicked = True
+                except:
+                    pass
+
+            # Strategy 2: More selectors
+            if not join_clicked:
+                selectors = [
+                    'button[title="Join"]',
+                    'button[aria-label="Join"]',
+                    '.zm-btn[has-text("Join")]'
+                ]
+                for sel in selectors:
+                    try:
+                        btn = await page.query_selector(sel)
+                        if btn and await btn.is_visible():
+                            await btn.click()
+                            join_clicked = True
+                            print(f"[OK] Clicked Zoom join via {sel}")
+                            break
+                    except:
+                        pass
+
+            if join_clicked:
+                print("[OK] Join button clicked or already in!")
+                await page.wait_for_timeout(3000)
+            else:
+                print("[WARN] Could not click Join button with any strategy")
+                await page.screenshot(path='zoom_join_failed.png')
+                print("[INFO] Screenshot saved: zoom_join_failed.png")
         
         # Step 5: Check for waiting room or success
         await page.wait_for_timeout(3000)

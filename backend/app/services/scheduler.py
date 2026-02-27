@@ -14,6 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.db.session import AsyncSessionLocal as SessionLocal
 from app.models.meeting import Meeting, MeetingStatus
+from app.utils.platform import detect_platform
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +98,19 @@ class AutoJoinScheduler:
             await db.commit()
             await db.refresh(meeting)
             
-            # Launch join script as subprocess
-            # We use subprocess.Popen to run it in background without blocking
-            cmd = [sys.executable, "simple_join.py", url]
+            # Launch join script based on platform
+            platform = detect_platform(url)
+            logger.info(f"Detected platform: {platform} for meeting {meeting_id}")
+            
+            if platform == "google_meet":
+                cmd = [sys.executable, "simple_join.py", url, "--meeting-id", str(meeting_id), "--api-url", "http://localhost:8000/api/v1"]
+            elif platform == "zoom":
+                cmd = [sys.executable, "zoom_join.py", url, "--meeting-id", str(meeting_id), "--api-url", "http://localhost:8000/api/v1"]
+            elif platform == "microsoft_teams":
+                cmd = [sys.executable, "teams_join.py", url, "--meeting-id", str(meeting_id), "--api-url", "http://localhost:8000/api/v1"]
+            else:
+                logger.warning(f"Unknown platform for URL: {url}. Falling back to simple_join.py")
+                cmd = [sys.executable, "simple_join.py", url, "--meeting-id", str(meeting_id), "--api-url", "http://localhost:8000/api/v1"]
             
             # Note: In production, you might want to use a more robust task queue like Celery
             # But for this MVP, a subprocess is sufficient
